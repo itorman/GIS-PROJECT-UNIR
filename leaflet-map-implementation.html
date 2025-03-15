@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa de Yacimientos Arqueológicos y Paleontológicos</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        html, body, #map {
+            height: 100%;
+            width: 100%;
+        }
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+        .info h4 {
+            margin: 0 0 5px;
+            color: #777;
+        }
+        .legend {
+            line-height: 18px;
+            color: #555;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        .sidebar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .filter-group {
+            margin-bottom: 10px;
+        }
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="sidebar">
+        <h3>Filtros de Yacimientos</h3>
+        
+        <div class="filter-group">
+            <label><strong>Tipo de Yacimiento:</strong></label>
+            <div>
+                <input type="checkbox" id="archaeological" checked />
+                <label for="archaeological">Arqueológico</label>
+            </div>
+            <div>
+                <input type="checkbox" id="paleontological" checked />
+                <label for="paleontological">Paleontológico</label>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <label><strong>Período:</strong></label>
+            <select id="period">
+                <option value="all">Todos</option>
+                <option value="prehistoric">Prehistórico</option>
+                <option value="protohistoric">Protohistórico</option>
+                <option value="classical">Clásico</option>
+                <option value="medieval">Medieval</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label><strong>Estado:</strong></label>
+            <select id="state">
+                <option value="all">Todos</option>
+                <option value="excavated">Excavado</option>
+                <option value="unexcavated">Sin excavar</option>
+                <option value="restored">Restaurado</option>
+            </select>
+        </div>
+        
+        <button id="apply-filters">Aplicar Filtros</button>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <script>
+        // Inicializar el mapa
+        var map = L.map('map').setView([40.416775, -3.703790], 6); // Centrado en España
+        
+        // Agregar capa base de OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Aquí cargaríamos los datos GeoJSON de los yacimientos
+        // En un caso real, estos datos vendrían de tu API o servidor
+        var sitesData = {
+            "type": "FeatureCollection",
+            "features": [
+                // Estos son ejemplos. En producción, estos datos vendrían de tu base de datos
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "id": 1,
+                        "name": "Atapuerca",
+                        "type": "paleontological",
+                        "period": "prehistoric",
+                        "state": "excavated",
+                        "description": "Importante yacimiento paleontológico y arqueológico"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [-3.5197, 42.3769]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "id": 2,
+                        "name": "Itálica",
+                        "type": "archaeological",
+                        "period": "classical",
+                        "state": "restored",
+                        "description": "Ciudad romana en la Bética"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [-6.0466, 37.4444]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": {
+                        "id": 3,
+                        "name": "Cueva de Altamira",
+                        "type": "archaeological",
+                        "period": "prehistoric",
+                        "state": "restored",
+                        "description": "Cueva con importantes pinturas rupestres"
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [-4.1230, 43.3776]
+                    }
+                }
+            ]
+        };
+        
+        // Función para asignar colores según el tipo de yacimiento
+        function getMarkerColor(type) {
+            return type === 'archaeological' ? '#e41a1c' : '#377eb8';
+        }
+        
+        // Crear la capa de marcadores
+        var sitesLayer = L.geoJSON(sitesData, {
+            pointToLayer: function(feature, latlng) {
+                return L.circleMarker(latlng, {
+                    radius: 8,
+                    fillColor: getMarkerColor(feature.properties.type),
+                    color: "#000",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+            },
+            onEachFeature: function(feature, layer) {
+                // Popup con información del yacimiento
+                var popupContent = "<div class='popup-content'>";
+                popupContent += "<h3>" + feature.properties.name + "</h3>";
+                popupContent += "<p><strong>Tipo:</strong> " + 
+                    (feature.properties.type === 'archaeological' ? "Arqueológico" : "Paleontológico") + "</p>";
+                popupContent += "<p><strong>Período:</strong> " + feature.properties.period + "</p>";
+                popupContent += "<p><strong>Estado:</strong> " + feature.properties.state + "</p>";
+                popupContent += "<p>" + feature.properties.description + "</p>";
+                popupContent += "</div>";
+                
+                layer.bindPopup(popupContent);
+            }
+        }).addTo(map);
+        
+        // Función para filtrar los yacimientos
+        function filterSites() {
+            // Obtener valores de los filtros
+            var archaeologicalChecked = document.getElementById('archaeological').checked;
+            var paleontologicalChecked = document.getElementById('paleontological').checked;
+            var periodFilter = document.getElementById('period').value;
+            var stateFilter = document.getElementById('state').value;
+            
+            // Eliminar la capa actual
+            map.removeLayer(sitesLayer);
+            
+            // Aplicar filtros
+            sitesLayer = L.geoJSON(sitesData, {
+                filter: function(feature) {
+                    // Filtrar por tipo
+                    if ((feature.properties.type === 'archaeological' && !archaeologicalChecked) ||
+                        (feature.properties.type === 'paleontological' && !paleontologicalChecked)) {
+                        return false;
+                    }
+                    
+                    // Filtrar por período
+                    if (periodFilter !== 'all' && feature.properties.period !== periodFilter) {
+                        return false;
+                    }
+                    
+                    // Filtrar por estado
+                    if (stateFilter !== 'all' && feature.properties.state !== stateFilter) {
+                        return false;
+                    }
+                    
+                    return true;
+                },
+                pointToLayer: function(feature, latlng) {
+                    return L.circleMarker(latlng, {
+                        radius: 8,
+                        fillColor: getMarkerColor(feature.properties.type),
+                        color: "#000",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    });
+                },
+                onEachFeature: function(feature, layer) {
+                    // Popup con información del yacimiento (igual que antes)
+                    var popupContent = "<div class='popup-content'>";
+                    popupContent += "<h3>" + feature.properties.name + "</h3>";
+                    popupContent += "<p><strong>Tipo:</strong> " + 
+                        (feature.properties.type === 'archaeological' ? "Arqueológico" : "Paleontológico") + "</p>";
+                    popupContent += "<p><strong>Período:</strong> " + feature.properties.period + "</p>";
+                    popupContent += "<p><strong>Estado:</strong> " + feature.properties.state + "</p>";
+                    popupContent += "<p>" + feature.properties.description + "</p>";
+                    popupContent += "</div>";
+                    
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(map);
+        }
+        
+        // Evento para aplicar filtros
+        document.getElementById('apply-filters').addEventListener('click', filterSites);
+        
+        // Añadir leyenda
+        var legend = L.control({position: 'bottomright'});
+        
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'info legend');
+            
+            div.innerHTML += '<h4>Tipos de Yacimientos</h4>';
+            div.innerHTML += '<i style="background:#e41a1c"></i> Arqueológicos<br>';
+            div.innerHTML += '<i style="background:#377eb8"></i> Paleontológicos<br>';
+            
+            return div;
+        };
+        
+        legend.addTo(map);
+    </script>
+</body>
+</html>
