@@ -69,7 +69,7 @@ Para un proyecto académico con un presupuesto limitado (máximo 100 euros) y ba
      - Almacenar en SQLite/SpatiaLite o como archivos GeoJSON
 
 3. **Desarrollo web**:
-   - Implementar interfaz similar al código de ejemplo anterior
+   - Implementar interfaz similar al código leaflet.html
    - Opciones de filtrado por tipo, época, etc.
    - Popups informativos al hacer clic en los yacimientos
 
