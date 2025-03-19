@@ -11,16 +11,16 @@ Para un proyecto académico con un presupuesto limitado (máximo 100 euros) y ba
 +-------------------+     +-------------------+     +-------------------+
 | EXTRACCIÓN DATOS  |     |  BASE DE DATOS    |     |  APLICACIÓN WEB   |
 |                   |     |                   |     |                   |
-| - Overpass API    | --> | - SQLite/SpatiaLite| --> | - HTML/CSS/JS    |
-| - Osmium Tool     |     | - GeoJSON Files   |     | - Leaflet         |
+| - Overpass API    | --> |  SQLite/SpatiaLite| --> | - HTML/CSS/JS    |
+|             |     | --> |  GeoJSON Files    |     | - Leaflet         |
 +-------------------+     +-------------------+     +-------------------+
 ```
 
 ## Componentes
 
 ### 1. Extracción de datos
+
 - **Herramienta principal**: Overpass API/Turbo (gratuito)
-- **Alternativa local**: Osmium Tool (open source)
 - **Enfoque**: Extraer sólo datos de yacimientos arqueológicos y paleontológicos mediante consultas específicas, sin necesidad de procesar los 144 GB completos.
 
 ### 2. Almacenamiento
