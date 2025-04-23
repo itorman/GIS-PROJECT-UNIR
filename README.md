@@ -11,7 +11,7 @@ Para un proyecto académico con un presupuesto limitado (máximo 100 euros) y ba
 +-------------------+     +-------------------+     +-------------------+
 | EXTRACCIÓN DATOS  |     |  BASE DE DATOS    |     |  APLICACIÓN WEB   |
 |                   |     |                   |     |                   |
-| - Overpass API    | --> |  SQLite/SpatiaLite| --> | - HTML/CSS/JS    |
+| - Overpass API    | --> |  PostgreSQL       | --> | - HTML/CSS/JS    |
 |             |     | --> |  GeoJSON Files    |     | - Leaflet         |
 +-------------------+     +-------------------+     +-------------------+
 ```
@@ -27,9 +27,8 @@ Para un proyecto académico con un presupuesto limitado (máximo 100 euros) y ba
 - **Opción simple**: Archivos GeoJSON estáticos
   - Ventaja: Sin necesidad de servidor de base de datos
   - Limitación: Menos eficiente para búsquedas complejas
-- **Opción recomendada**: SQLite con extensión SpatiaLite
-  - Ventaja: Base de datos completa sin necesidad de servidor
-  - Ideal para proyectos académicos locales
+- **Opción recomendada**: PostgreSQL con extensión POSTGIS y HSTORE
+    - Ideal para proyectos académicos locales
 
 ### 3. Backend minimalista
 - **Opción 1**: Sin backend (cargar directamente GeoJSON)
