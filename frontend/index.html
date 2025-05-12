@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualización de Nodos OSM</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh; /* El mapa ocupará toda la altura de la ventana */
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Inicializar el mapa
+    const map = L.map('map').setView([0, 0], 2); // Coordenadas iniciales y nivel de zoom
+
+    // Añadir capa base de OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Función para mostrar un mensaje de error en el mapa
+    function showError(message) {
+      const errorDiv = document.createElement('div');
+      errorDiv.style.position = 'absolute';
+      errorDiv.style.top = '10px';
+      errorDiv.style.left = '50%';
+      errorDiv.style.transform = 'translateX(-50%)';
+      errorDiv.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+      errorDiv.style.color = 'white';
+      errorDiv.style.padding = '10px';
+      errorDiv.style.borderRadius = '5px';
+      errorDiv.style.zIndex = '1000';
+      errorDiv.textContent = message;
+      document.body.appendChild(errorDiv);
+
+      setTimeout(() => {
+        document.body.removeChild(errorDiv);
+      }, 5000);
+    }
+
+    // Función para cargar datos GeoJSON desde el backend
+    async function loadGeoJSON() {
+      try {
+        const response = await fetch('http://localhost:3000/api/point/geojson'); // Ruta del backend
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        //console.log(result.rows[0].geometry); // Verifica las coordenadas de la primera fila
+        //console.log(data); // Verifica los datos en la consola
+        //console.log(data.features[0].geometry.coordinates);
+        
+
+        // Añadir los datos GeoJSON al mapa
+        const geoJsonLayer = L.geoJSON(data, {
+          onEachFeature: (feature, layer) => {
+            // Añadir un popup con información de las propiedades
+            const { osm_id, name, office, operator } = feature.properties;
+            layer.bindPopup(`
+              <strong>ID:</strong> ${osm_id}<br>
+              <strong>Nombre:</strong> ${name || 'N/A'}<br>
+              <strong>Oficina:</strong> ${office || 'N/A'}<br>
+              <strong>Operador:</strong> ${operator || 'N/A'}
+            `);
+          }
+        }).addTo(map);
+
+        //console.log('Límites del mapa:', geoJsonLayer.getBounds());
+        // Ajustar el mapa para mostrar todos los nodos
+        map.fitBounds(geoJsonLayer.getBounds());
+      } catch (error) {
+        console.error('Error al cargar los datos GeoJSON:', error);
+        showError('No se pudieron cargar los datos del mapa. Por favor, inténtalo de nuevo más tarde.');
+      }
+    }
+
+    // Cargar los datos al iniciar
+    loadGeoJSON();
+  </script>
+</body>
+</html>

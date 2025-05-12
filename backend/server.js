@@ -19,6 +19,12 @@ app.get('/', (req, res) => {
   res.send('API de nodos OSM funcionando');
 });
 
+// Manejo de errores global
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Algo salió mal.');
+});
+
 // Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);

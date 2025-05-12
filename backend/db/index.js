@@ -11,5 +11,13 @@ const pool = new Pool({
 });
 
 module.exports = {
-  query: (text, params) => pool.query(text, params)
+  // Manejo de errores en consultas
+  query: async (text, params) => {
+    try {
+      return await pool.query(text, params);
+    } catch (error) {
+      console.error('Error en la consulta:', error);
+      throw error;
+    }
+  }
 };

@@ -27,6 +27,11 @@ router.get('/filtrar', async (req, res) => {
   try {
     const { name, office, operator } = req.query;
     
+    // Validación de parámetros
+    if (!name && !office && !operator) {
+      return res.status(400).json({ error: 'Debe proporcionar al menos un parámetro de búsqueda (name, office, operator).' });
+    }
+    
     let query = `
       SELECT 
         osm_id, 
@@ -70,66 +75,34 @@ router.get('/filtrar', async (req, res) => {
 // Obtener nodos en formato GeoJSON (ideal para Leaflet)
 router.get('/geojson', async (req, res) => {
   try {
-    const { name, office, operator } = req.query;
-    
-    let query = `
+    const query = `
       SELECT 
         osm_id, 
         name, 
         office, 
         operator,
-        ST_AsGeoJSON(way)::json as geometry
+        ST_AsGeoJSON(ST_Transform(way, 4326))::json as geometry
       FROM planet_osm_point
-      WHERE 1=1
+      LIMIT 1000;
     `;
-    
-    const params = [];
-    let paramIndex = 1;
-    
-    if (name) {
-      query += ` AND name ILIKE $${paramIndex}`;
-      params.push(`%${name}%`);
-      paramIndex++;
-    }
-    
-    if (office) {
-      query += ` AND office ILIKE $${paramIndex}`;
-      params.push(`%${office}%`);
-      paramIndex++;
-    }
-    
-    if (operator) {
-      query += ` AND operator ILIKE $${paramIndex}`;
-      params.push(`%${operator}%`);
-      paramIndex++;
-    }
-    
-    // Añadir LIMIT para evitar devolver demasiados datos
-    query += ` LIMIT 1000`;
-    
-    const result = await db.query(query, params);
-    
-    // Convertir a formato GeoJSON
-    const geoJSON = {
+    const result = await db.query(query); // db es tu conexión a la base de datos
+    const features = result.rows.map(row => ({
+      type: 'Feature',
+      geometry: row.geometry,
+      properties: {
+        osm_id: row.osm_id,
+        name: row.name,
+        office: row.office,
+        operator: row.operator
+      }
+    }));
+    res.json({
       type: 'FeatureCollection',
-      features: result.rows.map(row => {
-        return {
-          type: 'Feature',
-          geometry: row.geometry,
-          properties: {
-            osm_id: row.osm_id,
-            name: row.name,
-            office: row.office,
-            operator: row.operator
-          }
-        };
-      })
-    };
-    
-    res.json(geoJSON);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener nodos en formato GeoJSON' });
+      features
+    });
+  } catch (error) {
+    console.error('Error al obtener los datos GeoJSON:', error);
+    res.status(500).send('Error al obtener los datos GeoJSON');
   }
 });
 
