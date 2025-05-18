@@ -72,30 +72,59 @@ router.get('/filtrar', async (req, res) => {
   }
 });
 
-// Obtener nodos en formato GeoJSON (ideal para Leaflet)
+// Obtener nodos en formato GeoJSON (ideal para Leaflet) VERSIÓN CORREGIDA CON CLAUDE 
 router.get('/geojson', async (req, res) => {
   try {
+    // Usamos la consulta que ya verificamos que funciona en PostgreSQL
     const query = `
       SELECT 
         osm_id, 
         name, 
         office, 
         operator,
-        ST_AsGeoJSON(ST_Transform(way, 4326))::json as geometry
+        jsonb_build_object(
+          'type', 'Point',
+          'coordinates', array[
+            ST_X(ST_Transform(way, 4326)), 
+            ST_Y(ST_Transform(way, 4326))
+          ]
+        ) as geometry
       FROM planet_osm_point
       LIMIT 1000;
     `;
-    const result = await db.query(query); // db es tu conexión a la base de datos
-    const features = result.rows.map(row => ({
-      type: 'Feature',
-      geometry: row.geometry,
-      properties: {
-        osm_id: row.osm_id,
-        name: row.name,
-        office: row.office,
-        operator: row.operator
+    
+    const result = await db.query(query);
+    
+    // Validación de coordenadas (para evitar problemas con valores extremos)
+    const features = result.rows.map(row => {
+      let coords = row.geometry.coordinates;
+      
+      // Validación básica para asegurar coordenadas en rangos razonables
+      if (coords[1] < -85 || coords[1] > 85) {
+        console.warn(`Coordenada inválida detectada: ${JSON.stringify(coords)} para osm_id ${row.osm_id}`);
       }
-    }));
+      
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: coords
+        },
+        properties: {
+          osm_id: row.osm_id,
+          name: row.name,
+          office: row.office,
+          operator: row.operator
+        }
+      };
+    });
+    
+    // Depuración
+    console.log(`Generado ${features.length} features`);
+    if (features.length > 0) {
+      console.log(`Primera feature: ${JSON.stringify(features[0], null, 2)}`);
+    }
+    
     res.json({
       type: 'FeatureCollection',
       features
@@ -105,7 +134,6 @@ router.get('/geojson', async (req, res) => {
     res.status(500).send('Error al obtener los datos GeoJSON');
   }
 });
-
 // Obtener valores únicos para los filtros
 router.get('/office-values', async (req, res) => {
   try {
