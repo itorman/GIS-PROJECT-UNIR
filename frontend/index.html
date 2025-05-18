@@ -11,8 +11,13 @@
   <div id="map"></div>
   <div id="control-panel">
     <div id="points-control" class="control-group">
-      <h3>Número de Puntos</h3>
-      <input type="number" id="points-number" min="1" max="1000" value="10" placeholder="Número de puntos">
+      <h3>Filtros</h3>
+      <label for="country-select">País:</label>
+      <select id="country-select" class="filter-input">
+        <option value="">Todos los países</option>
+      </select>
+      <label for="points-number">Número de Puntos:</label>
+      <input type="number" id="points-number" class="filter-input" min="1" max="10000" value="10" placeholder="Número de puntos">
       <button onclick="updatePoints()">Buscar Puntos</button>
     </div>
     <div id="node-info" class="control-group">
@@ -23,6 +28,26 @@
           <p><strong>Coordenadas:</strong></p>
           <p>Latitud: <span id="node-lat">-</span></p>
           <p>Longitud: <span id="node-lng">-</span></p>
+        </div>
+        <div class="tags-box">
+          <p><strong>País:</strong> <span id="node-country">-</span></p>
+          <p><strong>Sitio Arqueológico:</strong> <span id="node-archaeological">-</span></p>
+          <p><strong>Civilización Histórica:</strong> <span id="node-civilization">-</span></p>
+          <p><strong>Enlaces:</strong></p>
+          <div id="node-links">
+            <p id="website-link" style="display: none">
+              <strong>Website:</strong> <a href="#" target="_blank">Ver sitio web</a>
+            </p>
+            <p id="url-link" style="display: none">
+              <strong>URL:</strong> <a href="#" target="_blank">Ver URL</a>
+            </p>
+            <p id="wikidata-link" style="display: none">
+              <strong>Wikidata:</strong> <a href="#" target="_blank">Ver en Wikidata</a>
+            </p>
+            <p id="wikipedia-link" style="display: none">
+              <strong>Wikipedia:</strong> <a href="#" target="_blank">Ver en Wikipedia</a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -40,6 +65,37 @@
     }).addTo(map);
 
     let currentGeoJsonLayer = null;
+
+    // Cargar la lista de países
+    async function loadCountries() {
+      try {
+        const response = await fetch('http://localhost:3000/api/point/countries');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const countries = await response.json();
+        
+        const countrySelect = document.getElementById('country-select');
+        // Limpiar opciones existentes excepto la primera (Todos los países)
+        while (countrySelect.options.length > 1) {
+          countrySelect.remove(1);
+        }
+        
+        // Ordenar países por nombre
+        countries.sort((a, b) => a.name_es.localeCompare(b.name_es));
+        
+        // Añadir países al selector
+        countries.forEach(country => {
+          const option = document.createElement('option');
+          option.value = country.name_en; // Usamos el nombre en inglés como valor
+          option.textContent = country.name_es; // Mostramos el nombre en español
+          countrySelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Error al cargar la lista de países:', error);
+        showError('No se pudo cargar la lista de países');
+      }
+    }
 
     // Función para mostrar un mensaje de error en el mapa
     function showError(message) {
@@ -67,11 +123,62 @@
       const nodeName = document.getElementById('node-name');
       const nodeLat = document.getElementById('node-lat');
       const nodeLng = document.getElementById('node-lng');
+      const nodeCountry = document.getElementById('node-country');
+      const nodeArchaeological = document.getElementById('node-archaeological');
+      const nodeCivilization = document.getElementById('node-civilization');
+      
+      // Elementos de enlaces
+      const websiteLink = document.getElementById('website-link');
+      const urlLink = document.getElementById('url-link');
+      const wikidataLink = document.getElementById('wikidata-link');
+      const wikipediaLink = document.getElementById('wikipedia-link');
 
+      // Actualizar información básica
       nodeInfo.classList.add('active');
       nodeName.textContent = feature.properties.name || 'Sin nombre';
       nodeLat.textContent = feature.geometry.coordinates[1].toFixed(6);
       nodeLng.textContent = feature.geometry.coordinates[0].toFixed(6);
+      nodeCountry.textContent = feature.properties.country || 'No especificado';
+      
+      // Actualizar información arqueológica
+      nodeArchaeological.textContent = feature.properties.archaeological_site || 'No especificado';
+      nodeCivilization.textContent = feature.properties.historic_civilization || 'No especificado';
+
+      // Actualizar enlaces
+      // Website
+      if (feature.properties.website) {
+        websiteLink.style.display = 'block';
+        websiteLink.querySelector('a').href = feature.properties.website;
+      } else {
+        websiteLink.style.display = 'none';
+      }
+
+      // URL
+      if (feature.properties.url) {
+        urlLink.style.display = 'block';
+        urlLink.querySelector('a').href = feature.properties.url;
+      } else {
+        urlLink.style.display = 'none';
+      }
+
+      // Wikidata
+      if (feature.properties.wikidata) {
+        wikidataLink.style.display = 'block';
+        wikidataLink.querySelector('a').href = `https://www.wikidata.org/wiki/${feature.properties.wikidata}`;
+      } else {
+        wikidataLink.style.display = 'none';
+      }
+
+      // Wikipedia
+      if (feature.properties.wikipedia) {
+        wikipediaLink.style.display = 'block';
+        const wikipediaUrl = feature.properties.wikipedia.includes(':') 
+          ? `https://${feature.properties.wikipedia.split(':')[0]}.wikipedia.org/wiki/${feature.properties.wikipedia.split(':')[1]}`
+          : `https://wikipedia.org/wiki/${feature.properties.wikipedia}`;
+        wikipediaLink.querySelector('a').href = wikipediaUrl;
+      } else {
+        wikipediaLink.style.display = 'none';
+      }
     }
 
     // Función para cargar datos GeoJSON desde el backend
@@ -82,7 +189,14 @@
           map.removeLayer(currentGeoJsonLayer);
         }
 
-        const response = await fetch(`http://localhost:3000/api/point/geojson?limit=${limit}`);
+        const country = document.getElementById('country-select').value;
+        const url = new URL('http://localhost:3000/api/point/geojson');
+        url.searchParams.append('limit', limit);
+        if (country) {
+          url.searchParams.append('country', country);
+        }
+
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -92,10 +206,11 @@
         currentGeoJsonLayer = L.geoJSON(data, {
           onEachFeature: (feature, layer) => {
             // Añadir un popup con información básica
-            const { osm_id, name } = feature.properties;
+            const { osm_id, name, country } = feature.properties;
             layer.bindPopup(`
               <strong>ID:</strong> ${osm_id}<br>
-              <strong>Nombre:</strong> ${name || 'N/A'}
+              <strong>Nombre:</strong> ${name || 'N/A'}<br>
+              <strong>País:</strong> ${country || 'N/A'}
             `);
 
             // Añadir evento de clic para mostrar información detallada
@@ -116,14 +231,15 @@
     // Función para actualizar los puntos según el número ingresado
     function updatePoints() {
       const pointsNumber = document.getElementById('points-number').value;
-      if (pointsNumber < 1 || pointsNumber > 1000) {
-        showError('Por favor, ingrese un número entre 1 y 1000');
+      if (pointsNumber < 1 || pointsNumber > 10000) {
+        showError('Por favor, ingrese un número entre 1 y 10000');
         return;
       }
       loadGeoJSON(pointsNumber);
     }
 
-    // Cargar los datos iniciales
+    // Llamar a loadCountries cuando se carga la página
+    document.addEventListener('DOMContentLoaded', loadCountries);
     loadGeoJSON();
   </script>
 </body>

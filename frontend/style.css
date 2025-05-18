@@ -5,12 +5,12 @@ body {
 
 #map {
   height: 100vh;
-  width: 80%;
+  width: 84%;
   float: left;
 }
 
 #control-panel {
-  width: 20%;
+  width: 16%;
   height: 100vh;
   float: right;
   padding: 20px;
@@ -29,7 +29,33 @@ body {
 
 .control-group h3 {
   margin-top: 0;
+  margin-bottom: 15px;
   color: #333;
+}
+
+.control-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #666;
+  font-size: 0.9em;
+}
+
+.filter-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+select.filter-input {
+  background-color: white;
+  cursor: pointer;
+}
+
+select.filter-input:hover {
+  border-color: #999;
 }
 
 #points-control input[type="number"] {
@@ -48,6 +74,8 @@ body {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
 }
 
 #points-control button:hover {
@@ -62,10 +90,35 @@ body {
   display: block;
 }
 
-.coordinate-box {
+.coordinate-box, .tags-box {
   background-color: #fff;
   padding: 8px;
   margin-top: 5px;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+.tags-box {
+  margin-top: 15px;
+}
+
+.tags-box p {
+  margin: 8px 0;
+}
+
+#node-links {
+  margin-left: 10px;
+}
+
+#node-links a {
+  color: #2196F3;
+  text-decoration: none;
+}
+
+#node-links a:hover {
+  text-decoration: underline;
+}
+
+#node-links p {
+  margin: 5px 0;
 } 

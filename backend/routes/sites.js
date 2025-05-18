@@ -14,9 +14,28 @@ router.get('/filtrar', async (req, res) => {
     
     // Base de la consulta
     let query = `
+      WITH point_countries AS (
+        SELECT p.*, 
+               COALESCE(p.tags->'addr:country', p.tags->'country') as tagged_country,
+               c.country_name,
+               c.country_name_es,
+               c.iso_a2
+        FROM planet_osm_point p
+        CROSS JOIN LATERAL get_country_for_point(p.way) c
+        WHERE p.name ILIKE $1
+      )
       SELECT 
         osm_id, 
         name,
+        COALESCE(tags->'archaeological_site', '') as archaeological_site,
+        COALESCE(tags->'historic:civilization', '') as historic_civilization,
+        COALESCE(tags->'website', '') as website,
+        COALESCE(tags->'url', '') as url,
+        COALESCE(tags->'wikidata', '') as wikidata,
+        COALESCE(tags->'wikipedia', '') as wikipedia,
+        COALESCE(tagged_country, country_name) as country,
+        country_name_es as country_es,
+        iso_a2 as country_code,
         jsonb_build_object(
           'type', 'Point',
           'coordinates', array[
@@ -24,8 +43,7 @@ router.get('/filtrar', async (req, res) => {
             ST_Y(ST_Transform(way, 4326))
           ]
         ) as geometry
-      FROM planet_osm_point
-      WHERE name ILIKE $1
+      FROM point_countries
     `;
     
     const result = await db.query(query, [`%${name}%`]);
@@ -46,20 +64,53 @@ router.get('/filtrar', async (req, res) => {
     
     res.json(validatedRows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al filtrar nodos' });
+    console.error('Error en /filtrar:', err);
+    res.status(500).json({ error: 'Error al filtrar nodos', details: err.message });
   }
 });
 
 // Obtener nodos en formato GeoJSON (ideal para Leaflet)
 router.get('/geojson', async (req, res) => {
   try {
-    const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 1000);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 10000);
+    const country = req.query.country;
 
-    const query = `
+    let query = `
+      WITH point_countries AS (
+        SELECT p.*, 
+               wc.name as country_name,
+               wc.name_es as country_name_es,
+               wc.iso_a2
+        FROM planet_osm_point p
+        LEFT JOIN world_countries wc ON ST_Intersects(wc.geom, ST_Transform(p.way, 4326))
+        WHERE p.way IS NOT NULL
+        AND (p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site')
+    `;
+
+    const queryParams = [];
+    
+    if (country) {
+      queryParams.push(country);
+      query += ` AND (
+        wc.name = $1 OR
+        wc.name_es = $1 OR
+        wc.iso_a2 = $1
+      )`;
+    }
+
+    query += `) 
       SELECT 
         osm_id, 
         name,
+        COALESCE(tags->'archaeological_site', historic) as archaeological_site,
+        COALESCE(tags->'historic:civilization', '') as historic_civilization,
+        COALESCE(tags->'website', '') as website,
+        COALESCE(tags->'url', '') as url,
+        COALESCE(tags->'wikidata', '') as wikidata,
+        COALESCE(tags->'wikipedia', '') as wikipedia,
+        country_name as country,
+        country_name_es as country_es,
+        iso_a2 as country_code,
         jsonb_build_object(
           'type', 'Point',
           'coordinates', array[
@@ -67,11 +118,15 @@ router.get('/geojson', async (req, res) => {
             ST_Y(ST_Transform(way, 4326))
           ]
         ) as geometry
-      FROM planet_osm_point
-      LIMIT $1;
+      FROM point_countries
+      LIMIT $${queryParams.length + 1}
     `;
     
-    const result = await db.query(query, [limit]);
+    queryParams.push(limit);
+    
+    console.log('Ejecutando consulta con limit:', limit, 'y país:', country);
+    const result = await db.query(query, queryParams);
+    console.log(`Consulta ejecutada. Número de resultados: ${result.rows.length}`);
     
     // Validación de coordenadas
     const features = result.rows.map(row => {
@@ -90,24 +145,55 @@ router.get('/geojson', async (req, res) => {
         },
         properties: {
           osm_id: row.osm_id,
-          name: row.name
+          name: row.name || '',
+          archaeological_site: row.archaeological_site || '',
+          historic_civilization: row.historic_civilization || '',
+          website: row.website || '',
+          url: row.url || '',
+          wikidata: row.wikidata || '',
+          wikipedia: row.wikipedia || '',
+          country: row.country || '',
+          country_es: row.country_es || '',
+          country_code: row.country_code || ''
         }
       };
     });
-    
-    // Depuración
-    console.log(`Generado ${features.length} features`);
-    if (features.length > 0) {
-      console.log(`Primera feature: ${JSON.stringify(features[0], null, 2)}`);
-    }
     
     res.json({
       type: 'FeatureCollection',
       features
     });
   } catch (error) {
-    console.error('Error al obtener los datos GeoJSON:', error);
-    res.status(500).send('Error al obtener los datos GeoJSON');
+    console.error('Error en /geojson:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener los datos GeoJSON', 
+      details: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Obtener lista de países disponibles
+router.get('/countries', async (req, res) => {
+  try {
+    const query = `
+      SELECT DISTINCT 
+        name as name_en,
+        COALESCE(name_es, name) as name_es,
+        iso_a2 as code
+      FROM world_countries
+      WHERE name IS NOT NULL AND name != ''
+      ORDER BY name_es;
+    `;
+
+    const result = await db.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error al obtener la lista de países:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener la lista de países', 
+      details: error.message 
+    });
   }
 });
 
