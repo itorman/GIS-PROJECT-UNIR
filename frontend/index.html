@@ -5,25 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visualización de Nodos OSM</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" />
   <link rel="stylesheet" href="style.css">
+  <style>
+    #control-panel {
+      font-size: 90%; /* 10% smaller font */
+    }
+    
+    .legend .point-icon {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #4daf4a;
+      display: inline-block;
+      margin-right: 5px;
+    }
+    
+    .legend .polygon-icon {
+      width: 16px;
+      height: 10px;
+      background-color: #3388ff;
+      display: inline-block;
+      margin-right: 5px;
+      /* Lake-like asymmetric shape */
+      border-radius: 60% 40% 40% 20% / 70% 40% 60% 30%;
+    }
+    
+    .legend .line-icon {
+      width: 15px;
+      height: 2px;
+      background-color: #d73027;
+      display: inline-block;
+      margin-right: 5px;
+      margin-bottom: 3px;
+    }
+    
+    .section-title {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .section-title i {
+      margin-right: 5px;
+      font-size: 1.2em;
+    }
+    
+    .filter-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .element-counter {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 1000;
+      color: black;
+      font-weight: normal;
+      display: none;
+    }
+    
+    #points-control button, 
+    #node-info button,
+    button#clear-draw {
+      font-size: 0.9em;
+      padding: 4px 8px;
+      background-color: #888888 !important;
+      border: 1px solid #666;
+      color: white;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    
+    #points-control button:hover, 
+    #node-info button:hover,
+    button#clear-draw:hover {
+      background-color: #777777 !important;
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="element-counter" class="element-counter"></div>
   <div id="control-panel">
     <div id="points-control" class="control-group">
-      <h3>Filtros</h3>
-      <label for="country-select">País:</label>
-      <select id="country-select" class="filter-input">
-        <option value="">Todos los países</option>
-      </select>
-      <label for="points-number">Número de Puntos:</label>
-      <input type="number" id="points-number" class="filter-input" min="1" max="10000" value="10" placeholder="Número de puntos">
-      <button onclick="updatePoints()">Buscar Puntos</button>
+      <div class="filter-header">
+        <i class="fas fa-filter"></i>
+        <select id="country-select" class="filter-input">
+          <!-- "Todos los países" option removed -->
+        </select>
+      </div>
+      
+      <div class="geometry-filters">
+        <div class="checkbox-wrapper">
+          <input type="checkbox" id="show-points" class="filter-checkbox" checked>
+          <label for="show-points">Puntos</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <input type="checkbox" id="show-lines" class="filter-checkbox" checked>
+          <label for="show-lines">Líneas</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <input type="checkbox" id="show-polygons" class="filter-checkbox" checked>
+          <label for="show-polygons">Polígonos</label>
+        </div>
+      </div>
+      
+      <button onclick="updatePoints()">Buscar Elementos</button>
+      
+      <div class="draw-instructions">
+        <h4>Selección por Área:</h4>
+        <p>Utiliza las herramientas de dibujo para seleccionar un área en el mapa</p>
+        <button id="clear-draw" onclick="clearDrawings()">Limpiar selección</button>
+      </div>
     </div>
     <div id="node-info" class="control-group">
-      <h3>Información del Nodo</h3>
+      <div class="section-title">
+        <i class="fas fa-info-circle"></i>
+      </div>
       <div id="selected-node-info">
         <p><strong>Nombre:</strong> <span id="node-name">-</span></p>
+        <p><strong>Tipo:</strong> <span id="node-type">-</span></p>
         <div class="coordinate-box">
           <p><strong>Coordenadas:</strong></p>
           <p>Latitud: <span id="node-lat">-</span></p>
@@ -54,6 +164,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script>
     // Inicializar el mapa
     const map = L.map('map').setView([0, 0], 2);
@@ -64,7 +175,160 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
+    // Variables para el dibujo
+    let drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    
+    // Configurar controles de dibujo
+    const drawControl = new L.Control.Draw({
+      draw: {
+        polyline: false,
+        marker: false,
+        circle: false,
+        circlemarker: false,
+        polygon: {
+          allowIntersection: false,
+          drawError: {
+            color: '#e1e100',
+            message: '<strong>Error:</strong> ¡Los polígonos no pueden intersecarse!'
+          },
+          shapeOptions: {
+            color: '#f06eaa'
+          }
+        },
+        rectangle: {
+          shapeOptions: {
+            color: '#f06eaa'
+          }
+        }
+      },
+      edit: {
+        featureGroup: drawnItems,
+        remove: true
+      }
+    });
+    map.addControl(drawControl);
+
+    // Añadir leyenda al mapa
+    function addLegend() {
+      const legend = L.control({position: 'bottomright'});
+      
+      legend.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = 
+          '<div><i class="point-icon"></i> Puntos (yacimientos puntuales)</div>' +
+          '<div><i class="line-icon"></i> Líneas (elementos lineales)</div>' +
+          '<div><i class="polygon-icon"></i> Polígonos (yacimientos con área)</div>';
+        return div;
+      };
+      
+      legend.addTo(map);
+    }
+    
+    // Añadir leyenda inmediatamente
+    addLegend();
+
     let currentGeoJsonLayer = null;
+    let currentDrawnShape = null;
+    let allFeaturesData = null; // Para almacenar todos los datos GeoJSON del país seleccionado
+
+    // Función para actualizar el contador de elementos
+    function updateElementCounter(pointCount, lineCount, polygonCount) {
+      const totalCount = pointCount + lineCount + polygonCount;
+      const counterElement = document.getElementById('element-counter');
+      
+      if (totalCount > 0) {
+        counterElement.innerHTML = `Total: ${totalCount} elementos (${pointCount} puntos, ${lineCount} líneas, ${polygonCount} polígonos)`;
+        counterElement.style.display = 'block';
+      } else {
+        counterElement.style.display = 'none';
+      }
+    }
+
+    // Función para limpiar las formas dibujadas
+    function clearDrawings() {
+      drawnItems.clearLayers();
+      currentDrawnShape = null;
+      
+      // Si hay un país seleccionado y datos cargados, volver a mostrar todos los elementos
+      if (allFeaturesData) {
+        // Filtrar según los checkboxes seleccionados
+        const showPoints = document.getElementById('show-points').checked;
+        const showLines = document.getElementById('show-lines').checked;
+        const showPolygons = document.getElementById('show-polygons').checked;
+        
+        const filteredFeatures = allFeaturesData.features.filter(feature => {
+          const geomType = feature.geometry.type;
+          
+          if ((geomType === 'Point' && showPoints) ||
+              ((geomType === 'LineString' || geomType === 'MultiLineString') && showLines) ||
+              ((geomType === 'Polygon' || geomType === 'MultiPolygon') && showPolygons)) {
+            return true;
+          }
+          return false;
+        });
+        
+        const filteredGeoJsonData = {
+          type: 'FeatureCollection',
+          features: filteredFeatures
+        };
+        
+        renderGeoJSON(filteredGeoJsonData);
+        
+        // Actualizar contador
+        const points = filteredFeatures.filter(f => f.geometry.type === 'Point');
+        const lines = filteredFeatures.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+        const polygons = filteredFeatures.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
+        updateElementCounter(points.length, lines.length, polygons.length);
+      }
+    }
+
+    // Evento cuando se dibuja una forma
+    map.on(L.Draw.Event.CREATED, function (e) {
+      // Verificar si hay un país seleccionado y datos cargados
+      const country = document.getElementById('country-select').value;
+      if (!country || !allFeaturesData) {
+        showError('Primero debe seleccionar un país y cargar datos');
+        return;
+      }
+      
+      // Eliminar formas anteriores
+      drawnItems.clearLayers();
+      
+      // Guardar la forma dibujada
+      const layer = e.layer;
+      drawnItems.addLayer(layer);
+      
+      // Convertir la forma a GeoJSON
+      currentDrawnShape = layer.toGeoJSON();
+      
+      // Filtrar elementos dentro del área seleccionada
+      filterByDrawnArea(layer);
+    });
+    
+    // Eventos de edición
+    map.on(L.Draw.Event.EDITED, function (e) {
+      if (!allFeaturesData) return;
+      
+      const layers = e.layers;
+      layers.eachLayer(function (layer) {
+        // Actualizar la forma actual
+        currentDrawnShape = layer.toGeoJSON();
+        
+        // Filtrar elementos dentro del área actualizada
+        filterByDrawnArea(layer);
+      });
+    });
+    
+    // Evento de eliminación
+    map.on(L.Draw.Event.DELETED, function () {
+      currentDrawnShape = null;
+      
+      // Si hay datos cargados, volver a mostrar todos los elementos
+      if (allFeaturesData) {
+        clearDrawings();
+      }
+    });
 
     // Cargar la lista de países
     async function loadCountries() {
@@ -76,13 +340,19 @@
         const countries = await response.json();
         
         const countrySelect = document.getElementById('country-select');
-        // Limpiar opciones existentes excepto la primera (Todos los países)
-        while (countrySelect.options.length > 1) {
-          countrySelect.remove(1);
-        }
+        // Limpiar todas las opciones
+        countrySelect.innerHTML = '';
         
         // Ordenar países por nombre
         countries.sort((a, b) => a.name_es.localeCompare(b.name_es));
+        
+        // Añadir mensaje para seleccionar país
+        const placeholderOption = document.createElement('option');
+        placeholderOption.value = '';
+        placeholderOption.textContent = '-- Seleccionar país --';
+        placeholderOption.disabled = true;
+        placeholderOption.selected = true;
+        countrySelect.appendChild(placeholderOption);
         
         // Añadir países al selector
         countries.forEach(country => {
@@ -116,11 +386,72 @@
         document.body.removeChild(errorDiv);
       }, 5000);
     }
+    
+    // Función para mostrar un mensaje informativo en el mapa
+    function showMessage(message) {
+      const msgDiv = document.createElement('div');
+      msgDiv.style.position = 'absolute';
+      msgDiv.style.top = '10px';
+      msgDiv.style.left = '50%';
+      msgDiv.style.transform = 'translateX(-50%)';
+      msgDiv.style.backgroundColor = 'rgba(33, 150, 243, 0.8)';
+      msgDiv.style.color = 'white';
+      msgDiv.style.padding = '10px';
+      msgDiv.style.borderRadius = '5px';
+      msgDiv.style.zIndex = '1000';
+      msgDiv.textContent = message;
+      msgDiv.id = 'info-message';
+      
+      // Eliminar cualquier mensaje anterior
+      const oldMsg = document.getElementById('info-message');
+      if (oldMsg) {
+        document.body.removeChild(oldMsg);
+      }
+      
+      document.body.appendChild(msgDiv);
+      
+      // No eliminar automáticamente este mensaje, ya que informa sobre una operación en curso
+      return msgDiv;
+    }
 
-    // Función para actualizar la información del nodo seleccionado
+    // Función para obtener coordenadas centrales de un feature
+    function getFeatureCenter(feature) {
+      if (feature.geometry.type === 'Point') {
+        return {
+          lat: feature.geometry.coordinates[1],
+          lng: feature.geometry.coordinates[0]
+        };
+      } else if (feature.geometry.type === 'Polygon') {
+        // Para polígonos, utilizamos boundingBox para obtener el centro
+        const bounds = L.geoJSON(feature).getBounds();
+        return bounds.getCenter();
+      } else if (feature.geometry.type === 'LineString') {
+        // Para líneas, utilizamos el punto medio de la línea
+        const coords = feature.geometry.coordinates;
+        const midIndex = Math.floor(coords.length / 2);
+        return {
+          lat: coords[midIndex][1],
+          lng: coords[midIndex][0]
+        };
+      } else if (feature.geometry.type === 'MultiLineString') {
+        // Para multilíneas, utilizamos el punto medio de la primera línea
+        const coords = feature.geometry.coordinates[0];
+        const midIndex = Math.floor(coords.length / 2);
+        return {
+          lat: coords[midIndex][1],
+          lng: coords[midIndex][0]
+        };
+      } else {
+        // Para otros tipos de geometría, devolver un punto predeterminado
+        return { lat: 0, lng: 0 };
+      }
+    }
+
+    // Función para actualizar la información del elemento seleccionado
     function updateNodeInfo(feature) {
       const nodeInfo = document.getElementById('node-info');
       const nodeName = document.getElementById('node-name');
+      const nodeType = document.getElementById('node-type');
       const nodeLat = document.getElementById('node-lat');
       const nodeLng = document.getElementById('node-lng');
       const nodeCountry = document.getElementById('node-country');
@@ -136,8 +467,23 @@
       // Actualizar información básica
       nodeInfo.classList.add('active');
       nodeName.textContent = feature.properties.name || 'Sin nombre';
-      nodeLat.textContent = feature.geometry.coordinates[1].toFixed(6);
-      nodeLng.textContent = feature.geometry.coordinates[0].toFixed(6);
+      
+      // Mostrar tipo de geometría
+      let typeText = 'Desconocido';
+      if (feature.properties.geometry_type === 'point') {
+        typeText = 'Punto';
+      } else if (feature.properties.geometry_type === 'line') {
+        typeText = 'Línea';
+      } else if (feature.properties.geometry_type === 'polygon') {
+        typeText = 'Polígono';
+      }
+      nodeType.textContent = typeText;
+      
+      // Obtener coordenadas centrales para mostrar
+      const center = getFeatureCenter(feature);
+      nodeLat.textContent = center.lat.toFixed(6);
+      nodeLng.textContent = center.lng.toFixed(6);
+      
       nodeCountry.textContent = feature.properties.country || 'No especificado';
       
       // Actualizar información arqueológica
@@ -181,8 +527,164 @@
       }
     }
 
+    // Función para actualizar los puntos según el país seleccionado
+    function updatePoints() {
+      const country = document.getElementById('country-select').value;
+      
+      if (!country) {
+        showError('Debe seleccionar un país');
+        return;
+      }
+      
+      // Limpiar el área dibujada
+      drawnItems.clearLayers();
+      currentDrawnShape = null;
+      
+      loadGeoJSON();
+    }
+    
+    // Función para comprobar si un punto está dentro del área dibujada
+    function isPointInPolygon(point, drawnLayer) {
+      const lat = point[1];
+      const lng = point[0];
+      
+      let isInside = false;
+      
+      // Si el área dibujada es un polígono, comprobamos si el punto está dentro
+      if (drawnLayer instanceof L.Polygon) {
+        isInside = drawnLayer.getBounds().contains([lat, lng]);
+        
+        // Comprobación más precisa usando ray casting algorithm
+        if (isInside) {
+          const latlngs = drawnLayer.getLatLngs()[0]; // Obtener el primer anillo de coordenadas
+          const x = lng;
+          const y = lat;
+          let inside = false;
+          
+          for (let i = 0, j = latlngs.length - 1; i < latlngs.length; j = i++) {
+            const xi = latlngs[i].lng;
+            const yi = latlngs[i].lat;
+            const xj = latlngs[j].lng;
+            const yj = latlngs[j].lat;
+            
+            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+          }
+          
+          isInside = inside;
+        }
+      }
+      
+      return isInside;
+    }
+    
+    // Función para filtrar elementos dentro del área dibujada
+    function filterByDrawnArea(drawnLayer) {
+      if (!allFeaturesData) return;
+      
+      // Mostrar mensaje de carga
+      showMessage('Filtrando elementos dentro del área seleccionada...');
+      
+      // Obtener los filtros de tipo de geometría
+      const showPoints = document.getElementById('show-points').checked;
+      const showLines = document.getElementById('show-lines').checked;
+      const showPolygons = document.getElementById('show-polygons').checked;
+      
+      // Filtrar elementos por área y tipo
+      const filteredFeatures = allFeaturesData.features.filter(feature => {
+        const geomType = feature.geometry.type;
+        
+        // Primer filtro por tipo de geometría
+        if (!((geomType === 'Point' && showPoints) ||
+              ((geomType === 'LineString' || geomType === 'MultiLineString') && showLines) ||
+              ((geomType === 'Polygon' || geomType === 'MultiPolygon') && showPolygons))) {
+          return false;
+        }
+        
+        // Filtro por área dibujada
+        if (geomType === 'Point') {
+          // Para puntos, verificar si está dentro del área
+          return isPointInPolygon(feature.geometry.coordinates, drawnLayer);
+        } 
+        else if (geomType === 'LineString') {
+          // Para líneas, verificar si algún punto está dentro del área
+          for (const point of feature.geometry.coordinates) {
+            if (isPointInPolygon(point, drawnLayer)) {
+              return true;
+            }
+          }
+        } 
+        else if (geomType === 'MultiLineString') {
+          // Para multilíneas, verificar si algún punto está dentro del área
+          for (const line of feature.geometry.coordinates) {
+            for (const point of line) {
+              if (isPointInPolygon(point, drawnLayer)) {
+                return true;
+              }
+            }
+          }
+        } 
+        else if (geomType === 'Polygon') {
+          // Para polígonos, verificar si algún punto está dentro del área
+          for (const ring of feature.geometry.coordinates) {
+            for (const point of ring) {
+              if (isPointInPolygon(point, drawnLayer)) {
+                return true;
+              }
+            }
+          }
+        } 
+        else if (geomType === 'MultiPolygon') {
+          // Para multipolígonos, verificar si algún punto está dentro del área
+          for (const polygon of feature.geometry.coordinates) {
+            for (const ring of polygon) {
+              for (const point of ring) {
+                if (isPointInPolygon(point, drawnLayer)) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+        
+        return false;
+      });
+      
+      // Eliminar mensaje de carga
+      const loadingMsg = document.getElementById('info-message');
+      if (loadingMsg) {
+        document.body.removeChild(loadingMsg);
+      }
+      
+      // Mostrar elementos filtrados
+      const filteredGeoJsonData = {
+        type: 'FeatureCollection',
+        features: filteredFeatures
+      };
+      
+      // Contar elementos por tipo
+      const points = filteredFeatures.filter(f => f.geometry.type === 'Point');
+      const lines = filteredFeatures.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+      const polygons = filteredFeatures.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
+      
+      // Actualizar contador persistente
+      updateElementCounter(points.length, lines.length, polygons.length);
+      
+      // Mostrar la cantidad de elementos encontrados
+      showMessage(`Encontrados ${filteredFeatures.length} elementos dentro del área seleccionada`);
+      setTimeout(() => {
+        const infoMsg = document.getElementById('info-message');
+        if (infoMsg) {
+          document.body.removeChild(infoMsg);
+        }
+      }, 3000);
+      
+      // Mostrar elementos en el mapa
+      renderGeoJSON(filteredGeoJsonData);
+    }
+
     // Función para cargar datos GeoJSON desde el backend
-    async function loadGeoJSON(limit = 10) {
+    async function loadGeoJSON() {
       try {
         // Eliminar la capa anterior si existe
         if (currentGeoJsonLayer) {
@@ -190,57 +692,205 @@
         }
 
         const country = document.getElementById('country-select').value;
-        const url = new URL('http://localhost:3000/api/point/geojson');
-        url.searchParams.append('limit', limit);
-        if (country) {
-          url.searchParams.append('country', country);
+        
+        // Si no hay país seleccionado, no cargar nada
+        if (!country) {
+          return;
         }
+        
+        const url = new URL('http://localhost:3000/api/point/geojson');
+        
+        // Configurar para cargar todos los elementos del país (sin límite)
+        url.searchParams.append('unlimited', 'true');
+        url.searchParams.append('country', country);
+        
+        // Mostrar mensaje de carga
+        showMessage('Cargando todos los elementos del país seleccionado. Esto puede tardar varios segundos...');
 
         const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        // Eliminar mensaje de carga si existe
+        const loadingMsg = document.getElementById('info-message');
+        if (loadingMsg) {
+          document.body.removeChild(loadingMsg);
+        }
+        
         const data = await response.json();
-
-        // Añadir los datos GeoJSON al mapa
-        currentGeoJsonLayer = L.geoJSON(data, {
-          onEachFeature: (feature, layer) => {
-            // Añadir un popup con información básica
-            const { osm_id, name, country } = feature.properties;
-            layer.bindPopup(`
-              <strong>ID:</strong> ${osm_id}<br>
-              <strong>Nombre:</strong> ${name || 'N/A'}<br>
-              <strong>País:</strong> ${country || 'N/A'}
-            `);
-
-            // Añadir evento de clic para mostrar información detallada
-            layer.on('click', () => {
-              updateNodeInfo(feature);
-            });
+        
+        // Guardar todos los datos para uso posterior
+        allFeaturesData = data;
+        
+        // Log para debuggear
+        console.log(`Recibidos ${data.features.length} features`);
+        const points = data.features.filter(f => f.geometry.type === 'Point');
+        const lines = data.features.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+        const polygons = data.features.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
+        console.log(`De los cuales ${points.length} son puntos, ${lines.length} son líneas y ${polygons.length} son polígonos`);
+        
+        // Obtener los filtros de tipo de geometría
+        const showPoints = document.getElementById('show-points').checked;
+        const showLines = document.getElementById('show-lines').checked;
+        const showPolygons = document.getElementById('show-polygons').checked;
+        
+        // Filtrar las características según los checkboxes seleccionados
+        const filteredFeatures = data.features.filter(feature => {
+          const geomType = feature.geometry.type;
+          
+          if ((geomType === 'Point' && showPoints) ||
+              ((geomType === 'LineString' || geomType === 'MultiLineString') && showLines) ||
+              ((geomType === 'Polygon' || geomType === 'MultiPolygon') && showPolygons)) {
+            return true;
           }
-        }).addTo(map);
-
-        // Ajustar el mapa para mostrar todos los nodos
-        map.fitBounds(currentGeoJsonLayer.getBounds());
+          return false;
+        });
+        
+        // Crear una copia limpia del GeoJSON con las características filtradas
+        const geoJsonData = {
+          type: 'FeatureCollection',
+          features: filteredFeatures
+        };
+        
+        // Contar elementos por tipo
+        const filteredPoints = filteredFeatures.filter(f => f.geometry.type === 'Point');
+        const filteredLines = filteredFeatures.filter(f => f.geometry.type === 'LineString' || f.geometry.type === 'MultiLineString');
+        const filteredPolygons = filteredFeatures.filter(f => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon');
+        
+        // Actualizar contador persistente
+        updateElementCounter(filteredPoints.length, filteredLines.length, filteredPolygons.length);
+        
+        // Renderizar los datos
+        renderGeoJSON(geoJsonData);
       } catch (error) {
         console.error('Error al cargar los datos GeoJSON:', error);
+        
+        // Eliminar mensaje de carga si existe
+        const loadingMsg = document.getElementById('info-message');
+        if (loadingMsg) {
+          document.body.removeChild(loadingMsg);
+        }
+        
         showError('No se pudieron cargar los datos del mapa. Por favor, inténtalo de nuevo más tarde.');
       }
     }
-
-    // Función para actualizar los puntos según el número ingresado
-    function updatePoints() {
-      const pointsNumber = document.getElementById('points-number').value;
-      if (pointsNumber < 1 || pointsNumber > 10000) {
-        showError('Por favor, ingrese un número entre 1 y 10000');
-        return;
+    
+    // Función para renderizar datos GeoJSON en el mapa
+    function renderGeoJSON(geoJsonData) {
+      // Eliminar capa anterior si existe
+      if (currentGeoJsonLayer) {
+        map.removeLayer(currentGeoJsonLayer);
       }
-      loadGeoJSON(pointsNumber);
+      
+      // Añadir los datos GeoJSON al mapa con estilos según el tipo de geometría
+      currentGeoJsonLayer = L.geoJSON(geoJsonData, {
+        style: function(feature) {
+          // Estilo para polígonos
+          if (feature.geometry && (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon')) {
+            return {
+              fillColor: '#3388ff',
+              weight: 2,
+              opacity: 1,
+              color: '#2166ac',
+              fillOpacity: 0.5
+            };
+          }
+          // Estilo para líneas
+          else if (feature.geometry && (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString')) {
+            return {
+              color: '#d73027',  // Rojo
+              weight: 4,
+              opacity: 0.8,
+              lineCap: 'round',
+              lineJoin: 'round',
+              dashArray: '5, 5' // Línea discontinua para mejor visibilidad
+            };
+          }
+          return {}; // Estilo por defecto para otros tipos
+        },
+        pointToLayer: function(feature, latlng) {
+          // Estilo para puntos - 30% más pequeños
+          if (feature.geometry && feature.geometry.type === 'Point') {
+            return L.circleMarker(latlng, {
+              radius: 4.2,  // Original 6 * 0.7 = 4.2 (30% más pequeño)
+              fillColor: '#4daf4a',  // Verde
+              color: '#000',
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.8
+            });
+          }
+          return L.marker(latlng); // Fallback por defecto
+        },
+        onEachFeature: (feature, layer) => {
+          // Añadir un popup con información básica
+          const { osm_id, name, country, geometry_type } = feature.properties;
+          const type = geometry_type === 'point' ? 'Punto' : geometry_type === 'line' ? 'Línea' : 'Polígono';
+          
+          layer.bindPopup(`
+            <strong>ID:</strong> ${osm_id}<br>
+            <strong>Nombre:</strong> ${name || 'N/A'}<br>
+            <strong>País:</strong> ${country || 'N/A'}<br>
+            <strong>Tipo:</strong> ${type}
+          `);
+
+          // Añadir evento de clic para mostrar información detallada
+          layer.on('click', () => {
+            updateNodeInfo(feature);
+          });
+        },
+        // Mejora de rendimiento para grandes conjuntos de datos
+        coordsToLatLng: function (coords) {
+          return new L.LatLng(coords[1], coords[0]);
+        }
+      }).addTo(map);
+
+      // Ajustar el mapa para mostrar todos los nodos si hay alguno
+      if (currentGeoJsonLayer.getBounds().isValid()) {
+        map.fitBounds(currentGeoJsonLayer.getBounds());
+      }
     }
+
+    // Evento para actualizar la visualización cuando cambian los checkboxes
+    document.getElementById('show-points').addEventListener('change', function() {
+      if (currentDrawnShape) {
+        const drawnLayer = drawnItems.getLayers()[0];
+        if (drawnLayer) {
+          filterByDrawnArea(drawnLayer);
+        }
+      } else if (allFeaturesData) {
+        clearDrawings();
+      }
+    });
+    
+    document.getElementById('show-lines').addEventListener('change', function() {
+      if (currentDrawnShape) {
+        const drawnLayer = drawnItems.getLayers()[0];
+        if (drawnLayer) {
+          filterByDrawnArea(drawnLayer);
+        }
+      } else if (allFeaturesData) {
+        clearDrawings();
+      }
+    });
+    
+    document.getElementById('show-polygons').addEventListener('change', function() {
+      if (currentDrawnShape) {
+        const drawnLayer = drawnItems.getLayers()[0];
+        if (drawnLayer) {
+          filterByDrawnArea(drawnLayer);
+        }
+      } else if (allFeaturesData) {
+        clearDrawings();
+      }
+    });
 
     // Llamar a loadCountries cuando se carga la página
     document.addEventListener('DOMContentLoaded', loadCountries);
-    loadGeoJSON();
+    
+    // No cargar datos al inicio
+    // loadGeoJSON(); - Removido para que no cargue al inicio
   </script>
 </body>
 </html>
