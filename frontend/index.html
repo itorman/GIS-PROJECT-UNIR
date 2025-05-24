@@ -99,9 +99,9 @@
     <div id="points-control" class="control-group">
       <div class="filter-header">
         <i class="fas fa-filter"></i>
-        <select id="country-select" class="filter-input">
+      <select id="country-select" class="filter-input">
           <!-- "Todos los países" option removed -->
-        </select>
+      </select>
       </div>
       
       <div class="geometry-filters">
@@ -386,7 +386,7 @@
         document.body.removeChild(errorDiv);
       }, 5000);
     }
-    
+
     // Función para mostrar un mensaje informativo en el mapa
     function showMessage(message) {
       const msgDiv = document.createElement('div');
@@ -702,7 +702,7 @@
         
         // Configurar para cargar todos los elementos del país (sin límite)
         url.searchParams.append('unlimited', 'true');
-        url.searchParams.append('country', country);
+          url.searchParams.append('country', country);
         
         // Mostrar mensaje de carga
         showMessage('Cargando todos los elementos del país seleccionado. Esto puede tardar varios segundos...');
@@ -719,7 +719,7 @@
         }
         
         const data = await response.json();
-        
+
         // Guardar todos los datos para uso posterior
         allFeaturesData = data;
         
@@ -823,28 +823,28 @@
           }
           return L.marker(latlng); // Fallback por defecto
         },
-        onEachFeature: (feature, layer) => {
-          // Añadir un popup con información básica
+          onEachFeature: (feature, layer) => {
+            // Añadir un popup con información básica
           const { osm_id, name, country, geometry_type } = feature.properties;
           const type = geometry_type === 'point' ? 'Punto' : geometry_type === 'line' ? 'Línea' : 'Polígono';
           
-          layer.bindPopup(`
-            <strong>ID:</strong> ${osm_id}<br>
-            <strong>Nombre:</strong> ${name || 'N/A'}<br>
+            layer.bindPopup(`
+              <strong>ID:</strong> ${osm_id}<br>
+              <strong>Nombre:</strong> ${name || 'N/A'}<br>
             <strong>País:</strong> ${country || 'N/A'}<br>
             <strong>Tipo:</strong> ${type}
-          `);
+            `);
 
-          // Añadir evento de clic para mostrar información detallada
-          layer.on('click', () => {
-            updateNodeInfo(feature);
-          });
+            // Añadir evento de clic para mostrar información detallada
+            layer.on('click', () => {
+              updateNodeInfo(feature);
+            });
         },
         // Mejora de rendimiento para grandes conjuntos de datos
         coordsToLatLng: function (coords) {
           return new L.LatLng(coords[1], coords[0]);
-        }
-      }).addTo(map);
+          }
+        }).addTo(map);
 
       // Ajustar el mapa para mostrar todos los nodos si hay alguno
       if (currentGeoJsonLayer.getBounds().isValid()) {
@@ -858,7 +858,7 @@
         const drawnLayer = drawnItems.getLayers()[0];
         if (drawnLayer) {
           filterByDrawnArea(drawnLayer);
-        }
+      }
       } else if (allFeaturesData) {
         clearDrawings();
       }
@@ -883,7 +883,7 @@
         }
       } else if (allFeaturesData) {
         clearDrawings();
-      }
+    }
     });
 
     // Llamar a loadCountries cuando se carga la página

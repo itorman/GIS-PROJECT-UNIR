@@ -75,7 +75,7 @@ router.get('/geojson', async (req, res) => {
     const requestedLimit = parseInt(req.query.limit) || 10;
     const unlimitedCountry = req.query.unlimited === 'true';
     const country = req.query.country;
-    
+
     // Determinar si se debe aplicar un límite
     let useLimit = true;
     let limit = Math.min(Math.max(requestedLimit, 1), 10000);
