@@ -56,7 +56,6 @@ router.get('/filtrar', async (req, res) => {
       if (coords[1] < -85 || coords[1] > 85) {
         console.warn(`Coordenada inválida detectada: ${JSON.stringify(coords)} para osm_id ${row.osm_id}`);
       }
-      
       return row;
     });
     
