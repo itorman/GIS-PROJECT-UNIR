@@ -1,223 +1,26 @@
 # GIS-PROJECT-UNIR
 Final project for a Master degree at UNIR (Universidad Internacional de La Rioja) focused on GIS and Big Data tecnologies
 
-# Arquitectura general para proyecto académico de mapa de yacimientos arqueológicos y paleontológicos. Arquitectura para un desarrollo sin tecnologías Big Data
 
-Para un proyecto académico con un presupuesto limitado (máximo 100 euros) y basado en tecnologías open source.
+El presente trabajo fin de máster (TFM), tiene como objetivo desarrollar una aplicación cartográfica web que utilice datos abiertos de OpenStreetMap (OSM). El proyecto se plantea como un experimento piloto, de acuerdo con las líneas de trabajo que exploran los entornos informáticos distribuidos y la visualización de datos como técnica de análisis. La motivación principal reside en la gran cantidad de información geoespacial disponible libremente en OpenStreetMap, una base de datos colaborativa que estructura su contenido en nodos, líneas, áreas y relaciones, y que asocia etiquetas descriptivas a cada elemento. En concreto, el proyecto se centra en la extracción, procesamiento y visualización de yacimientos arqueológicos y paleontológicos etiquetados como tal en OSM.
+Los objetivos clave de este trabajo son tres: en primer lugar, generar un mapa web interactivo para visualizar la distribución espacial de dichos yacimientos. Para ello, se ha optado por la biblioteca Leaflet. En segundo lugar, la creación de una base de datos especializada dedicada exclusivamente a yacimientos arqueológicos y paleontológicos, obtenida a partir de una extracción selectiva del conjunto de datos de OSM. Esta base de datos debería permitir la selección y el filtrado de los datos en función de sus etiquetas asociadas. Por último, se pretende desarrollar una Análisis Exploratorio de los Datos (AED) para observar el crecimiento temporal de los yacimientos, la detección de elementos con información incompleta (como ausencia de nombre o referencias externas como Wikidata o Wikipedia) y el análisis de la contribución de los usuarios a la base de datos.
 
-## Arquitectura del sistema
+El proyecto aborda tres fases cruciales, de las cuales la primera es la extracción de los datos relevantes de OpenStreetMap. Dado el gran tamaño de la base de datos global de OSM, que puede superar los 144 GB, esta etapa implica obtener y filtrar selectivamente solo los elementos etiquetados específicamente como yacimientos arqueológicos (historic=archaeological_site) o paleontológicos (geological=palaeontological_site).
+Una vez obtenidos los datos, la siguiente fase consiste en la creación de una base de datos especializada para almacenar estos datos temáticos. Para el desarrollo inicial, se utiliza una base de datos PostgreSQL local, configurada con la extensión PostGIS para gestionar información geoespacial y HSTORE para manejar el sistema flexible de etiquetas de OSM. Herramientas optimizadas como osm2pgsql se utilizan para la importación eficiente de los datos filtrados.
+La última fase es la visualización en la web de los datos almacenados. El propósito principal aquí es crear un mapa web interactivo que tenga como objetivo visualizar la distribución en el espacio de los yacimientos. Para este módulo frontend, se ha preferido sobre todo la biblioteca Leaflet. La aplicación web que se obtiene pretende dar una interfaz sencilla para facilitar la recorrida y el acceso a la información de los yacimientos.
 
-```
-+-------------------+     +-------------------+     +-------------------+
-| EXTRACCIÓN DATOS  |     |  BASE DE DATOS    |     |  APLICACIÓN WEB   |
-|                   |     |                   |     |                   |
-| - Overpass API    | --> |  PostgreSQL       | --> | - HTML/CSS/JS    |
-|             |     | --> |  GeoJSON Files    |     | - Leaflet         |
-+-------------------+     +-------------------+     +-------------------+
-```
+##	Arquitectura del sistema
+La arquitectura de un sistema software es el conjunto de decisiones y soluciones que definen su estructura y funcionamiento, y que permiten alcanzar los objetivos establecidos para el mismo. Esta arquitectura se divide en componentes que interactúan entre sí y se organizan de manera jerárquica, y puede incluir aspectos como el hardware, el software, la comunicación entre diferentes sistemas y la interacción con los usuarios finales. La arquitectura permite asegurar que el sistema cumpla con los requisitos funcionales y no funcionales, como el rendimiento, la seguridad y la escalabilidad. 
+La arquitectura del sistema desarrollado en este proyecto se basa en una serie de capas, y elementos externos, que interactúan entre sí. Esta se divide en tres partes principales, y dos accesorias.
+ Las capas principales son: 
+1.	La capa de usuario, o capa GUI y de entrada de parámetros. Esta capa es la interfaz de usuario que permite al usuario ingresar los parámetros para la búsqueda de elementos. Está construida utilizando tecnologías JavaScript, HTML y CSS, e integra la librería Leaflet para la visualización interactiva de mapas. El usuario puede explorar de forma intuitiva los yacimientos, hacer zoom, desplazarse sobre el mapa y consultar información relevante sobre cada punto geográfico. Además, la interfaz permite la interacción dinámica con los datos, mostrando información contextual y facilitando la navegación geográfica.
+2.	La capa backend y API. Esta El backend, implementado en JavaScript a través del framework Node.js. Esta capa es la encargada de gestionar la lógica de negocio, procesar las peticiones del frontend y servir los datos geoespaciales a través de una API REST. Esta capa actúa como intermediaria entre la base de datos y la interfaz web, permitiendo filtrar, consultar y transformar los datos conforme a los requerimientos de la aplicación y las peticiones de los usuarios.
+3.	La capa de persistencia de los datos. Los datos geográficos de los yacimientos son almacenados en una base de datos PostgreSQL, en la base denominada “OSM". La base de datos utiliza la extensión PostGIS para el manejo eficiente de datos espaciales y georreferenciados, permitiendo realizar consultas avanzadas sobre la localización, atributos y relaciones espaciales de los yacimientos. 
+Elementos estructurales accesorios:
+1.	Sistemas de Ingesta y actualización de datos Open Source:
+Como fuente principal de información, el sistema se conecta con el proyecto OpenStreetMap para la obtención de datos sobre yacimientos arqueológicos y paleontológicos. Se emplean herramientas y librerías open source para la descarga, transformación y carga de estos datos en la base de datos PostgreSQL, garantizando la actualización y calidad de la información.
 
-## Componentes
+Tal como se ilustra en la siguiente figura, la arquitectura propuesta asegura una clara modularidad y la posibilidad de ampliar el sistema, permitiendo la integración futura de nuevas fuentes de datos, funcionalidades de análisis avanzado o mejoras en la interfaz web, todo ello manteniendo el compromiso con el uso de tecnologías y datos abiertos.
 
-### 1. Extracción de datos
-
-- **Herramienta principal**: Overpass API/Turbo (gratuito)
-- **Enfoque**: Extraer sólo datos de yacimientos arqueológicos y paleontológicos mediante consultas específicas, sin necesidad de procesar los 144 GB completos.
-
-### 2. Almacenamiento
-- **Opción simple**: Archivos GeoJSON estáticos
-  - Ventaja: Sin necesidad de servidor de base de datos
-  - Limitación: Menos eficiente para búsquedas complejas
-- **Opción recomendada**: PostgreSQL con extensión POSTGIS y HSTORE
-    - Ideal para proyectos académicos locales
-
-### 3. Backend minimalista
-- **Opción 1**: Sin backend (cargar directamente GeoJSON)
-  - Para proyectos muy pequeños (< 1000 yacimientos)
-- **Opción 2**: Backend ligero con Python (Flask)
-  - Alojamiento: PythonAnywhere (tiene plan gratuito)
-  - Alternativa: GitHub Pages + GitHub Actions para preprocesamiento
-
-### 4. Frontend
-- **Framework**: HTML/CSS/JavaScript vanilla
-- **Biblioteca de mapas**: Leaflet (open source)
-- **Hospedaje**: GitHub Pages (gratuito) o Netlify (plan gratuito)
-
-## Flujo de desarrollo
-
-1. **Extracción inicial**:
-   - Utiliza Overpass Turbo para obtener todos los yacimientos con consultas como:
-     ```
-     [out:json];
-     (
-       node["historic"="archaeological_site"];
-       way["historic"="archaeological_site"];
-       relation["historic"="archaeological_site"];
-       node["site_type"="paleontological_site"];
-       way["site_type"="paleontological_site"];
-     );
-     out body;
-     >;
-     out skel qt;
-     ```
-
-2. **Procesamiento y limpieza**:
-   - Script Python para:
-     - Convertir datos OSM a GeoJSON normalizado
-     - Añadir/corregir propiedades
-     - Clasificar por tipo (arqueológico/paleontológico)
-     - Almacenar en SQLite/SpatiaLite o como archivos GeoJSON
-
-3. **Desarrollo web**:
-   - Implementar interfaz similar al código leaflet.html
-   - Opciones de filtrado por tipo, época, etc.
-   - Popups informativos al hacer clic en los yacimientos
-
-## Costes estimados (manteniendo bajo presupuesto)
-
-| Componente | Opción | Coste |
-|------------|--------|-------|
-| Extracción de datos | Overpass API (servicio público) | €0 |
-| Base de datos | SQLite/SpatiaLite (local) | €0 |
-| Desarrollo | Herramientas locales (VS Code, QGIS) | €0 |
-| Hospedaje frontend | GitHub Pages / Netlify | €0 |
-| Hospedaje backend (opcional) | PythonAnywhere (tier Beginner) | ~€5/mes |
-| Dominio personalizado (opcional) | Proveedor económico (.xyz, .tech) | ~€10/año |
-
-**Total máximo estimado**: ~€70/año (con todas las opciones)
-**Opción mínima viable**: €0 (utilizando solo servicios gratuitos)
-
-## Ventajas de esta arquitectura para proyecto académico
-
-1. **Simplicidad**: Enfoque straightforward sin componentes innecesarios
-2. **Coste mínimo**: Utiliza principalmente servicios gratuitos
-3. **Open source**: Todas las tecnologías propuestas son de código abierto
-4. **Educativo**: Cubre el proceso completo de extracción, procesamiento y visualización
-5. **Ampliable**: Puede expandirse si el proyecto crece posteriormente
-
-
-# Arquitectura general para proyecto académico de mapa de yacimientos arqueológicos y paleontológicos. Arquitectura para un desarrollo CON tecnologías Big Data
-
-## Visión general de la arquitectura
-
-```
-+-------------------+     +-------------------+     +-------------------+     +-------------------+     +-------------------+
-|  EXTRACCIÓN       |     | ALMACENAMIENTO    |     | PROCESAMIENTO     |     | BASES DE DATOS    |     | VISUALIZACIÓN     |
-|  DATOS            |     | DISTRIBUIDO       |     | DISTRIBUIDO       |     | ESPECIALIZADAS    |     | FRONTEND          |
-|                   |     |                   |     |                   |     |                   |     |                   |
-| - Overpass API    | --> | - HDFS           | --> | - Apache Spark    | --> | - PostgreSQL/     | --> | - Leaflet         |
-| - OSM Planet XML  |     |                   |     |                   |     |   PostGIS         |     | - HTML/CSS/JS     |
-| - Osmium Tool     |     |                   |     |                   |     | - Hive/Impala     |     |                   |
-+-------------------+     +-------------------+     +-------------------+     +-------------------+     +-------------------+
-```
-
-## Componentes detallados
-
-### 1. Extracción de datos
-- **Fuente principal**: OSM Planet XML (~144 GB)
-- **Herramientas**: 
-  - Overpass API para extracción específica
-  - Osmium Tool para preprocesamiento inicial
-  - Scripts personalizados para carga en HDFS
-
-### 2. Almacenamiento distribuido
-- **HDFS (Hadoop Distributed File System)**:
-  - Distribución: Apache Hadoop (versión 3.x)
-  - Configuración: Clúster mínimo con 1 NameNode y 2 DataNodes
-  - Formato de datos: Parquet (columnar, eficiente para consultas analíticas)
-  - Particionamiento: Por región geográfica y tipo de yacimiento
-
-### 3. Procesamiento distribuido
-- **Apache Spark**:
-  - Core para procesamiento general
-  - Spark SQL para consultas estructuradas
-  - GeoSpark o Sedona para procesamiento geoespacial
-  - Tareas:
-    - Limpieza y normalización de datos
-    - Extracción de yacimientos arqueológicos/paleontológicos
-    - Enriquecimiento con metadatos adicionales
-    - Análisis espacial (proximidad, clustering)
-
-### 4. Bases de datos especializadas
-- **Base de datos geoespacial**:
-  - **PostgreSQL con PostGIS**:
-    - Almacenamiento optimizado para datos espaciales
-    - Índices espaciales para consultas eficientes
-    - Soporte completo para operaciones geoespaciales
-
-- **Capa de consulta analítica**:
-  - **Apache Hive**:
-    - Consultas SQL sobre datos en HDFS
-    - Tablas particionadas por región y tipo
-    - Integración con Spark para procesamiento
-  - **Apache Impala** (alternativa):
-    - Consultas de baja latencia
-    - Mejor rendimiento para consultas interactivas
-
-### 5. Capa de API y servicio
-- **API REST geoespacial**:
-  - Framework: Flask con GeoAlchemy
-  - Endpoints principales:
-    - `/api/sites` (con filtros por tipo, época, región)
-    - `/api/stats` (estadísticas agregadas)
-  - Formatos de respuesta: GeoJSON, TopoJSON
-
-### 6. Frontend de visualización
-- **Mapa interactivo**:
-  - Biblioteca: Leaflet
-  - Capas base: OpenStreetMap, CartoDB, Stamen
-  - Controles de filtrado dinámico
-  - Popups informativos
-  - Clustering para manejo de grandes volúmenes
-
-## Flujo de trabajo
-
-1. **Ingesta inicial**:
-   - Descarga de OSM Planet XML
-   - Preprocesamiento con Osmium para reducir tamaño
-   - Carga en HDFS (formato Parquet)
-
-2. **Procesamiento con Spark**:
-   ```python
-   from pyspark.sql import SparkSession
-   from pyspark.sql.functions import *
-   
-   spark = SparkSession.builder \
-       .appName("OSM Archaeological Sites") \
-       .config("spark.jars.packages", "org.apache.sedona:sedona-python-adapter-3.0_2.12:1.0.0") \
-       .getOrCreate()
-   
-   osm_data = spark.read.parquet("hdfs:///data/osm/planet")
-   
-   archaeological_sites = osm_data.filter(
-       (col("tags.historic") == "archaeological_site") | 
-       (col("tags.site_type") == "paleontological_site")
-   )
-   
-   processed_sites = archaeological_sites \
-       .withColumn("site_type", when(col("tags.site_type") == "paleontological_site", "paleontological").otherwise("archaeological")) \
-       .withColumn("period", col("tags.period")) \
-       .withColumn("geometry", st_geomFromWKT(col("wkt")))
-   
-   processed_sites.write.saveAsTable("archaeological_sites")
-   ```
-
-3. **Carga en bases de datos especializadas**:
-   - Exportar resultados de Spark a PostgreSQL/PostGIS
-   - Crear tablas e índices espaciales en PostGIS
-   - Configurar vistas en Hive para consultas analíticas
-
-4. **Despliegue de API**:
-   - Implementación en Flask con endpoints RESTful
-
-5. **Implementación de frontend**:
-   - Página HTML con mapa Leaflet
-   - Conexión con API mediante AJAX
-   - Controles de filtrado y visualización
-
-## Ventajas de esta arquitectura
-
-1. **Escalabilidad**: Preparada para manejar el volumen completo de datos OSM
-2. **Procesamiento distribuido**: Capacidad para análisis espacial avanzado
-3. **Consultas especializadas**: Integración con PostGIS y Hive para diferentes necesidades
-4. **Open source y flexible**: Puede adaptarse a diferentes entornos y cargas de trabajo
-
+ 
+![image](https://github.com/user-attachments/assets/1df3ce62-cf79-46f2-8da7-830d795c7483)
