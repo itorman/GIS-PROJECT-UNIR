@@ -90,6 +90,39 @@
     button#clear-draw:hover {
       background-color: #777777 !important;
     }
+    
+    .geometry-filters {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 15px;
+    }
+    
+    .site-type-filters {
+      margin-bottom: 15px;
+    }
+    
+    .site-type-filters h4 {
+      margin: 0 0 8px 0;
+      font-size: 0.9em;
+      color: #333;
+    }
+    
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 3px;
+    }
+    
+    .filter-checkbox {
+      margin: 0;
+    }
+    
+    .filter-checkbox + label {
+      font-size: 0.85em;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -116,6 +149,18 @@
         <div class="checkbox-wrapper">
           <input type="checkbox" id="show-polygons" class="filter-checkbox" checked>
           <label for="show-polygons">Polígonos</label>
+        </div>
+      </div>
+      
+      <div class="site-type-filters">
+        <h4>Filtro por Tipo de Sitio:</h4>
+        <div class="checkbox-wrapper">
+          <input type="checkbox" id="show-archaeological" class="filter-checkbox" checked>
+          <label for="show-archaeological">Sitios Arqueológicos</label>
+        </div>
+        <div class="checkbox-wrapper">
+          <input type="checkbox" id="show-palaeontological" class="filter-checkbox" checked>
+          <label for="show-palaeontological">Sitios Paleontológicos</label>
         </div>
       </div>
       
@@ -486,9 +531,17 @@
       
       nodeCountry.textContent = feature.properties.country || 'No especificado';
       
-      // Actualizar información arqueológica
-      nodeArchaeological.textContent = feature.properties.archaeological_site || 'No especificado';
-      nodeCivilization.textContent = feature.properties.historic_civilization || 'No especificado';
+      // Actualizar información arqueológica/paleontológica
+      if (feature.properties.site_type === 'archaeological') {
+        nodeArchaeological.textContent = feature.properties.archaeological_site || 'Sitio Arqueológico';
+        nodeCivilization.textContent = feature.properties.historic_civilization || 'No especificado';
+      } else if (feature.properties.site_type === 'palaeontological') {
+        nodeArchaeological.textContent = feature.properties.palaeontological_site || 'Sitio Paleontológico';
+        nodeCivilization.textContent = 'Sitio Paleontológico';
+      } else {
+        nodeArchaeological.textContent = feature.properties.archaeological_site || feature.properties.palaeontological_site || 'No especificado';
+        nodeCivilization.textContent = feature.properties.historic_civilization || 'No especificado';
+      }
 
       // Actualizar enlaces
       // Website
@@ -702,7 +755,18 @@
         
         // Configurar para cargar todos los elementos del país (sin límite)
         url.searchParams.append('unlimited', 'true');
-          url.searchParams.append('country', country);
+        url.searchParams.append('country', country);
+        
+        // Añadir filtro por tipo de sitio
+        const showArchaeological = document.getElementById('show-archaeological').checked;
+        const showPalaeontological = document.getElementById('show-palaeontological').checked;
+        
+        if (showArchaeological && !showPalaeontological) {
+          url.searchParams.append('type', 'archaeo');
+        } else if (!showArchaeological && showPalaeontological) {
+          url.searchParams.append('type', 'palaeo');
+        }
+        // Si ambos están marcados o ninguno está marcado, no se añade parámetro type (ambos tipos)
         
         // Mostrar mensaje de carga
         showMessage('Cargando todos los elementos del país seleccionado. Esto puede tardar varios segundos...');
@@ -825,14 +889,16 @@
         },
           onEachFeature: (feature, layer) => {
             // Añadir un popup con información básica
-          const { osm_id, name, country, geometry_type } = feature.properties;
+          const { osm_id, name, country, geometry_type, site_type } = feature.properties;
           const type = geometry_type === 'point' ? 'Punto' : geometry_type === 'line' ? 'Línea' : 'Polígono';
+          const siteType = site_type === 'archaeological' ? 'Arqueológico' : site_type === 'palaeontological' ? 'Paleontológico' : 'Desconocido';
           
             layer.bindPopup(`
               <strong>ID:</strong> ${osm_id}<br>
               <strong>Nombre:</strong> ${name || 'N/A'}<br>
             <strong>País:</strong> ${country || 'N/A'}<br>
-            <strong>Tipo:</strong> ${type}
+            <strong>Tipo:</strong> ${type}<br>
+            <strong>Sitio:</strong> ${siteType}
             `);
 
             // Añadir evento de clic para mostrar información detallada
@@ -883,7 +949,22 @@
         }
       } else if (allFeaturesData) {
         clearDrawings();
-    }
+      }
+    });
+
+    // Eventos para los checkboxes de tipo de sitio
+    document.getElementById('show-archaeological').addEventListener('change', function() {
+      // Si hay datos cargados, recargar con el nuevo filtro
+      if (allFeaturesData) {
+        loadGeoJSON();
+      }
+    });
+    
+    document.getElementById('show-palaeontological').addEventListener('change', function() {
+      // Si hay datos cargados, recargar con el nuevo filtro
+      if (allFeaturesData) {
+        loadGeoJSON();
+      }
     });
 
     // Llamar a loadCountries cuando se carga la página

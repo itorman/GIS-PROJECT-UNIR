@@ -74,6 +74,7 @@ router.get('/geojson', async (req, res) => {
     const requestedLimit = parseInt(req.query.limit) || 10;
     const unlimitedCountry = req.query.unlimited === 'true';
     const country = req.query.country;
+    const type = req.query.type; // Nuevo parámetro: archaeo, palaeo, o undefined para ambos
 
     // Determinar si se debe aplicar un límite
     let useLimit = true;
@@ -151,6 +152,17 @@ router.get('/geojson', async (req, res) => {
       console.error('Error en debug de elementos:', error);
     }
 
+    // Construir la condición WHERE según el tipo de filtro
+    let typeCondition = '';
+    if (type === 'archaeo') {
+      typeCondition = `AND (p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site')`;
+    } else if (type === 'palaeo') {
+      typeCondition = `AND (p.tags ? 'geological' AND p.tags->'geological' = 'palaeontological_site')`;
+    } else {
+      // Sin filtro de tipo - incluir ambos
+      typeCondition = `AND ((p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site') OR (p.tags ? 'geological' AND p.tags->'geological' = 'palaeontological_site'))`;
+    }
+
     // Query for points
     let pointQuery = `
       WITH point_countries AS (
@@ -161,7 +173,7 @@ router.get('/geojson', async (req, res) => {
         FROM planet_osm_point p
         LEFT JOIN world_countries wc ON ST_Intersects(wc.geom, ST_Transform(p.way, 4326))
         WHERE p.way IS NOT NULL
-        AND (p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site')
+        ${typeCondition}
     `;
 
     const queryParams = [];
@@ -181,6 +193,7 @@ router.get('/geojson', async (req, res) => {
         name,
         'point' as geometry_type,
         COALESCE(tags->'archaeological_site', historic) as archaeological_site,
+        COALESCE(tags->'geological', '') as palaeontological_site,
         COALESCE(tags->'historic:civilization', '') as historic_civilization,
         COALESCE(tags->'website', '') as website,
         COALESCE(tags->'url', '') as url,
@@ -189,6 +202,11 @@ router.get('/geojson', async (req, res) => {
         country_name as country,
         country_name_es as country_es,
         iso_a2 as country_code,
+        CASE 
+          WHEN historic = 'archaeological_site' OR tags ? 'archaeological_site' THEN 'archaeological'
+          WHEN tags ? 'geological' AND tags->'geological' = 'palaeontological_site' THEN 'palaeontological'
+          ELSE 'unknown'
+        END as site_type,
         jsonb_build_object(
           'type', 'Point',
           'coordinates', array[
@@ -217,7 +235,7 @@ router.get('/geojson', async (req, res) => {
         FROM planet_osm_line p
         LEFT JOIN world_countries wc ON ST_Intersects(wc.geom, ST_Transform(p.way, 4326))
         WHERE p.way IS NOT NULL
-        AND (p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site')
+        ${typeCondition}
     `;
 
     const lineParams = [];
@@ -236,6 +254,7 @@ router.get('/geojson', async (req, res) => {
         name,
         'line' as geometry_type,
         COALESCE(tags->'archaeological_site', historic) as archaeological_site,
+        COALESCE(tags->'geological', '') as palaeontological_site,
         COALESCE(tags->'historic:civilization', '') as historic_civilization,
         COALESCE(tags->'website', '') as website,
         COALESCE(tags->'url', '') as url,
@@ -244,6 +263,11 @@ router.get('/geojson', async (req, res) => {
         country_name as country,
         country_name_es as country_es,
         iso_a2 as country_code,
+        CASE 
+          WHEN historic = 'archaeological_site' OR tags ? 'archaeological_site' THEN 'archaeological'
+          WHEN tags ? 'geological' AND tags->'geological' = 'palaeontological_site' THEN 'palaeontological'
+          ELSE 'unknown'
+        END as site_type,
         ST_AsGeoJSON(ST_Transform(way, 4326)) as geometry
       FROM line_countries
     `;
@@ -265,7 +289,7 @@ router.get('/geojson', async (req, res) => {
         FROM planet_osm_polygon p
         LEFT JOIN world_countries wc ON ST_Intersects(wc.geom, ST_Transform(p.way, 4326))
         WHERE p.way IS NOT NULL
-        AND (p.historic = 'archaeological_site' OR p.tags ? 'archaeological_site')
+        ${typeCondition}
     `;
 
     const polygonParams = [];
@@ -284,6 +308,7 @@ router.get('/geojson', async (req, res) => {
         name,
         'polygon' as geometry_type,
         COALESCE(tags->'archaeological_site', historic) as archaeological_site,
+        COALESCE(tags->'geological', '') as palaeontological_site,
         COALESCE(tags->'historic:civilization', '') as historic_civilization,
         COALESCE(tags->'website', '') as website,
         COALESCE(tags->'url', '') as url,
@@ -292,6 +317,11 @@ router.get('/geojson', async (req, res) => {
         country_name as country,
         country_name_es as country_es,
         iso_a2 as country_code,
+        CASE 
+          WHEN historic = 'archaeological_site' OR tags ? 'archaeological_site' THEN 'archaeological'
+          WHEN tags ? 'geological' AND tags->'geological' = 'palaeontological_site' THEN 'palaeontological'
+          ELSE 'unknown'
+        END as site_type,
         ST_AsGeoJSON(ST_Transform(way, 4326)) as geometry
       FROM polygon_countries
     `;
@@ -325,6 +355,7 @@ router.get('/geojson', async (req, res) => {
           osm_id: row.osm_id,
           name: row.name || '',
           archaeological_site: row.archaeological_site || '',
+          palaeontological_site: row.palaeontological_site || '',
           historic_civilization: row.historic_civilization || '',
           website: row.website || '',
           url: row.url || '',
@@ -333,7 +364,8 @@ router.get('/geojson', async (req, res) => {
           country: row.country || '',
           country_es: row.country_es || '',
           country_code: row.country_code || '',
-          geometry_type: row.geometry_type
+          geometry_type: row.geometry_type,
+          site_type: row.site_type || 'unknown'
         }
       });
     });
@@ -357,6 +389,7 @@ router.get('/geojson', async (req, res) => {
             osm_id: row.osm_id,
             name: row.name || '',
             archaeological_site: row.archaeological_site || '',
+            palaeontological_site: row.palaeontological_site || '',
             historic_civilization: row.historic_civilization || '',
             website: row.website || '',
             url: row.url || '',
@@ -365,7 +398,8 @@ router.get('/geojson', async (req, res) => {
             country: row.country || '',
             country_es: row.country_es || '',
             country_code: row.country_code || '',
-            geometry_type: row.geometry_type
+            geometry_type: row.geometry_type,
+            site_type: row.site_type || 'unknown'
           }
         });
       } catch (error) {
@@ -392,6 +426,7 @@ router.get('/geojson', async (req, res) => {
             osm_id: row.osm_id,
             name: row.name || '',
             archaeological_site: row.archaeological_site || '',
+            palaeontological_site: row.palaeontological_site || '',
             historic_civilization: row.historic_civilization || '',
             website: row.website || '',
             url: row.url || '',
@@ -400,7 +435,8 @@ router.get('/geojson', async (req, res) => {
             country: row.country || '',
             country_es: row.country_es || '',
             country_code: row.country_code || '',
-            geometry_type: row.geometry_type
+            geometry_type: row.geometry_type,
+            site_type: row.site_type || 'unknown'
           }
         });
       } catch (error) {
